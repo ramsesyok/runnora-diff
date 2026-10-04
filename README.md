@@ -327,6 +327,8 @@ Actions 画面から「Release」ワークフローを手動実行（`tag` に `
 
 ファジングで見つかった失敗入力は `jsondiff/testdata/fuzz/` に置くと、通常の `go test` で回帰テストとして実行されます。
 
+
 ## ライセンス
 
-[MIT License](LICENSE)
+自作部分は [MIT License](LICENSE)（Copyright (c) 2026 ramsesyok）です。
+依存ライブラリの表示は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、利用・配布時の条件は [ライセンス方針](docs/license-policy.md) を参照してください。
