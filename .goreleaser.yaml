@@ -2,6 +2,10 @@ version: 2
 
 project_name: runnora-diff
 
+before:
+  hooks:
+    - go run scripts/licenses.go
+
 builds:
   - id: runnora-diff
     main: .
@@ -24,6 +28,7 @@ archives:
     files:
       - LICENSE
       - README.md
+      - THIRD_PARTY_NOTICES.md
       - docs/spec.md
 
 checksum:
