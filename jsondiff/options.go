@@ -45,6 +45,10 @@ type Options struct {
 	// Unordered lists paths of arrays whose element order does not matter.
 	// It applies to the matched arrays only, not to arrays nested in them.
 	Unordered []string `json:"unordered" yaml:"unordered"`
+	// NumericStrings treats valid JSON number strings at the matched nodes
+	// as numbers, on either side, including for tolerance comparisons. It
+	// does not apply to descendants unless the path expression selects them.
+	NumericStrings []string `json:"numericStrings" yaml:"numericStrings"`
 	// Tolerances lists per-path tolerances. When several rules match a number,
 	// the rule matching the deepest path wins, and among rules matching at
 	// the same depth the last one wins.

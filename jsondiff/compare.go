@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 )
@@ -159,9 +160,10 @@ type compiledRule struct {
 }
 
 type compiled struct {
-	ignore     []*pathQuery
-	unordered  []*pathQuery
-	tolerances []compiledRule
+	ignore         []*pathQuery
+	unordered      []*pathQuery
+	numericStrings []*pathQuery
+	tolerances     []compiledRule
 }
 
 func compile(o *Options) (*compiled, error) {
@@ -182,6 +184,13 @@ func compile(o *Options) (*compiled, error) {
 			return nil, fmt.Errorf("unordered: %w", err)
 		}
 		c.unordered = append(c.unordered, q)
+	}
+	for _, p := range o.NumericStrings {
+		q, err := compilePathQuery(p)
+		if err != nil {
+			return nil, fmt.Errorf("numericStrings: %w", err)
+		}
+		c.numericStrings = append(c.numericStrings, q)
 	}
 	for i, r := range o.Tolerances {
 		name := fmt.Sprintf("tolerances[%d]", i)
@@ -220,9 +229,10 @@ type ruleSides struct {
 }
 
 type matcher struct {
-	ignore     sides
-	unordered  sides
-	tolerances []ruleSides
+	ignore         sides
+	unordered      sides
+	numericStrings sides
+	tolerances     []ruleSides
 }
 
 // evalSides returns the union of the paths the queries match in e and in a.
@@ -253,6 +263,9 @@ func (c *compiled) match(e, a any) (*matcher, error) {
 	}
 	if m.unordered, err = evalSides(c.unordered, e, a); err != nil {
 		return nil, fmt.Errorf("unordered: %w", err)
+	}
+	if m.numericStrings, err = evalSides(c.numericStrings, e, a); err != nil {
+		return nil, fmt.Errorf("numericStrings: %w", err)
 	}
 	for i, r := range c.tolerances {
 		s, err := evalSides([]*pathQuery{r.q}, e, a)
@@ -307,6 +320,15 @@ func (w *walker) walk(e, a any, pe, pa Path, tol AppliedTolerance) {
 		return
 	}
 	tol = w.m.at(pe, pa, tol)
+	if w.m.numericStrings.has(pe, pa) {
+		_, okE := comparisonNumberLiteral(e, true)
+		_, okA := comparisonNumberLiteral(a, true)
+		if okE && okA {
+			w.compared++
+			w.compareNumbers(e, a, pe, tol, true)
+			return
+		}
+	}
 
 	te, ta := typeOf(e), typeOf(a)
 	if te != ta {
@@ -327,7 +349,7 @@ func (w *walker) walk(e, a any, pe, pa Path, tol AppliedTolerance) {
 		}
 	case "number":
 		w.compared++
-		w.compareNumbers(e, a, pe, tol)
+		w.compareNumbers(e, a, pe, tol, false)
 	default:
 		w.compared++
 		if !reflect.DeepEqual(e, a) {
@@ -427,9 +449,9 @@ func (w *walker) walkUnordered(e, a []any, pe, pa Path, tol AppliedTolerance) {
 	}
 }
 
-func (w *walker) compareNumbers(e, a any, pe Path, tol AppliedTolerance) {
-	es, okE := numberLiteral(e)
-	as, okA := numberLiteral(a)
+func (w *walker) compareNumbers(e, a any, pe Path, tol AppliedTolerance, allowStrings bool) {
+	es, okE := comparisonNumberLiteral(e, allowStrings)
+	as, okA := comparisonNumberLiteral(a, allowStrings)
 	if !okE || !okA {
 		w.add(Difference{Path: pe.String(), Kind: KindChanged, Expected: e, Actual: a})
 		return
@@ -519,6 +541,16 @@ func exactRange(f *big.Float) bool {
 func decimalRat(f float64) *big.Rat {
 	r, _ := new(big.Rat).SetString(strconv.FormatFloat(f, 'g', -1, 64))
 	return r
+}
+
+var jsonNumberString = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
+
+// Keep the literal intact: parsing through float64 would round 64-bit integers.
+func comparisonNumberLiteral(v any, allowStrings bool) (string, bool) {
+	if s, ok := v.(string); ok && allowStrings && jsonNumberString.MatchString(s) {
+		return s, true
+	}
+	return numberLiteral(v)
 }
 
 func numberLiteral(v any) (string, bool) {

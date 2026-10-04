@@ -49,13 +49,15 @@ JSON の型（object / array / string / number / boolean / null）を区別す�
 | ケース | 結果 |
 |---|---|
 | `1` と `1.0`、`1e2` と `100` | 一致（数値として比較） |
-| `"1"` と `1` | 不一致（型違い） |
+| `"1"` と `1` | 既定では不一致（型違い）。`numericStrings` の対象なら数値として比較 |
 | `null` とキー不在 | 不一致（欠落 / 追加） |
 | `true` と `1` | 不一致（型違い） |
 
 ### 3.4 文字列・真偽値・null
 
 完全一致で比較する（正規化なし）。
+
+例外として、`numericStrings` が選択したノードでは、JSON 数値の構文に一致する文字列を数値として比較する。両側が数値または数値文字列の場合に 3.5 の許容誤差を適用し、差分の元の値と JSON 型は保持する。`"00123"`、空白付き文字列、空文字、`"NaN"` 等は数値に変換せず通常の比較を行う。null・欠落は変換しない。この機能は proto に依存しない。
 
 ### 3.5 数値
 
@@ -89,6 +91,7 @@ runn の `compare` / `diff` 関数の `ignorePaths` と揃え、**jq のパス�
 - 構文エラー、およびパス式でない式（`1`、`.a | tostring` など）は設定エラー（終了コード 2）。
 - スライス（`.[1:3]`）で得られるパスは単一ノードに対応しないため無視する。
 - ignore / tolerances は、一致したノード **とその配下すべて** に適用される。
+- numericStrings は、一致したノード自身にのみ適用される。配列要素や子孫は `.ids[]` / `.stats | ..` 等で選択する。
 
 ## 5. ルールの優先順位
 
@@ -128,6 +131,7 @@ tolerances:
 | `default.rel` | number | `0` | 既定の相対誤差 |
 | `ignore` | string[] | `[]` | 比較しないパス |
 | `unordered` | string[] | `[]` | 順序を問わない配列のパス |
+| `numericStrings` | string[] | `[]` | 数値文字列を数値比較するパス |
 | `tolerances[].path` | string | 必須 | 適用パス |
 | `tolerances[].abs` | number | `0` | 絶対誤差 |
 | `tolerances[].rel` | number | `0` | 相対誤差 |
@@ -143,6 +147,7 @@ tolerances:
 | `--rel <float>` | 既定の相対誤差（設定ファイルの `default.rel` を上書き） |
 | `--ignore <path>` | 無視パス（複数指定可、設定ファイルに追加） |
 | `--unordered <path>` | 順序を問わない配列のパス（複数指定可、設定ファイルに追加） |
+| `--numeric-string <path>` | 数値文字列を数値比較するパス（複数指定可、設定ファイルに追加） |
 | `--format text\|json` | 出力形式（既定 `text`） |
 | `--color` / `--no-color` | 色付けの強制 ON / OFF（既定は TTY のときのみ ON） |
 | `-q, --quiet` | 差分を出力せず終了コードのみ返す |
