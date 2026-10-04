@@ -19,10 +19,11 @@ func writeFile(t *testing.T, name, content string) string {
 
 func TestLoadConfig(t *testing.T) {
 	want := &Options{
-		Default:    Tolerance{Abs: 1e-6},
-		Ignore:     []string{".meta.timestamp", ".. | .requestId?"},
-		Unordered:  []string{".tags"},
-		Tolerances: []ToleranceRule{{Path: ".items[].price", Abs: 0.01}, {Path: ".stats", Rel: 0.001}},
+		Default:        Tolerance{Abs: 1e-6},
+		Ignore:         []string{".meta.timestamp", ".. | .requestId?"},
+		Unordered:      []string{".tags"},
+		NumericStrings: []string{".items[].id"},
+		Tolerances:     []ToleranceRule{{Path: ".items[].price", Abs: 0.01}, {Path: ".stats", Rel: 0.001}},
 	}
 	yamlCfg := `default:
   abs: 1e-6
@@ -31,6 +32,8 @@ ignore:
   - .. | .requestId?
 unordered:
   - .tags
+numericStrings:
+  - .items[].id
 tolerances:
   - path: .items[].price
     abs: 0.01
@@ -41,6 +44,7 @@ tolerances:
   "default": {"abs": 1e-6},
   "ignore": [".meta.timestamp", ".. | .requestId?"],
   "unordered": [".tags"],
+  "numericStrings": [".items[].id"],
   "tolerances": [{"path": ".items[].price", "abs": 0.01}, {"path": ".stats", "rel": 0.001}]
 }`
 	for _, tc := range []struct{ name, content string }{
@@ -78,6 +82,7 @@ func TestLoadConfigErrors(t *testing.T) {
 		{"negative.yaml", "default:\n  abs: -1\n", "non-negative"},
 		{"missing-path.yaml", "tolerances:\n  - abs: 1\n", "empty path"},
 		{"bad-jq.yaml", "ignore:\n  - '.a['\n", "invalid path"},
+		{"bad-numeric-path.yaml", "numericStrings:\n  - '.a['\n", "numericStrings"},
 		{"bad.json", `{`, "unexpected EOF"},
 	}
 	for _, tt := range tests {

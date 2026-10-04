@@ -112,6 +112,22 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunNumericStrings(t *testing.T) {
+	f := newFixture(t, map[string]string{
+		"e.json":     `{"id":9223372036854775807,"amount":123.01}`,
+		"rules.yaml": "numericStrings:\n  - .id\ntolerances:\n  - path: .amount\n    abs: 0.01\n",
+	})
+	a := `{"id":"9223372036854775807","amount":"123"}`
+	got := runCLI(a, false, "--config", f.path("rules.yaml"), "--numeric-string", ".amount", f.path("e.json"), "-")
+	if got.code != 0 || got.stdout != "" || got.stderr != "" {
+		t.Fatalf("got %+v", got)
+	}
+	got = runCLI(a, false, "--numeric-string", ".[", f.path("e.json"), "-")
+	if got.code != 2 || !strings.Contains(got.stderr, "numericStrings") {
+		t.Fatalf("invalid numeric path: %+v", got)
+	}
+}
+
 func TestRunJSONOutputIsParseable(t *testing.T) {
 	f := newFixture(t, map[string]string{
 		"e.json": `{"items":[{"price":100.5}]}`,

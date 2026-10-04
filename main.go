@@ -52,6 +52,7 @@ Flags:
       --rel <float>       default relative tolerance (overrides the config)
       --ignore <path>     path to ignore (repeatable, added to the config)
       --unordered <path>  array path whose order is ignored (repeatable, added to the config)
+      --numeric-string <path>  compare number strings numerically at this path (repeatable)
       --format <format>   output format: text or json (default text)
       --color             force colored output
       --no-color          disable colored output
@@ -87,17 +88,18 @@ func (f *floatFlag) Set(s string) error {
 }
 
 type cliOptions struct {
-	config    string
-	abs, rel  floatFlag
-	ignore    stringList
-	unordered stringList
-	format    string
-	color     bool
-	noColor   bool
-	quiet     bool
-	verbose   bool
-	version   bool
-	args      []string
+	config         string
+	abs, rel       floatFlag
+	ignore         stringList
+	unordered      stringList
+	numericStrings stringList
+	format         string
+	color          bool
+	noColor        bool
+	quiet          bool
+	verbose        bool
+	version        bool
+	args           []string
 }
 
 func parseArgs(args []string, stderr io.Writer) (*cliOptions, error) {
@@ -110,6 +112,7 @@ func parseArgs(args []string, stderr io.Writer) (*cliOptions, error) {
 	fs.Var(&o.rel, "rel", "")
 	fs.Var(&o.ignore, "ignore", "")
 	fs.Var(&o.unordered, "unordered", "")
+	fs.Var(&o.numericStrings, "numeric-string", "")
 	fs.StringVar(&o.format, "format", "text", "")
 	fs.BoolVar(&o.color, "color", false, "")
 	fs.BoolVar(&o.noColor, "no-color", false, "")
@@ -172,6 +175,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, tty bool) int
 	}
 	opts.Ignore = append(opts.Ignore, o.ignore...)
 	opts.Unordered = append(opts.Unordered, o.unordered...)
+	opts.NumericStrings = append(opts.NumericStrings, o.numericStrings...)
 
 	expected, err := readDoc(o.args[0], stdin)
 	if err != nil {
