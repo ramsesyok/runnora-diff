@@ -52,6 +52,8 @@ type Difference struct {
 	// Diff and Tolerance are set only for numbers of KindChanged.
 	Diff      *float64
 	Tolerance *AppliedTolerance
+	// Enum is set only for KindChanged values compared by an enum rule.
+	Enum *EnumMatch
 }
 
 // MarshalJSON omits the fields that do not apply to the Kind, while still
@@ -72,6 +74,9 @@ func (d Difference) MarshalJSON() ([]byte, error) {
 	}
 	if d.Tolerance != nil {
 		m = append(m, kv{"tolerance", d.Tolerance})
+	}
+	if d.Enum != nil {
+		m = append(m, kv{"enum", d.Enum})
 	}
 	return m.MarshalJSON()
 }
@@ -163,6 +168,7 @@ type compiled struct {
 	ignore         []*pathQuery
 	unordered      []*pathQuery
 	numericStrings []*pathQuery
+	enums          []*compiledEnum
 	tolerances     []compiledRule
 }
 
@@ -191,6 +197,13 @@ func compile(o *Options) (*compiled, error) {
 			return nil, fmt.Errorf("numericStrings: %w", err)
 		}
 		c.numericStrings = append(c.numericStrings, q)
+	}
+	for i, r := range o.Enums {
+		e, err := compileEnum(i, r)
+		if err != nil {
+			return nil, err
+		}
+		c.enums = append(c.enums, e)
 	}
 	for i, r := range o.Tolerances {
 		name := fmt.Sprintf("tolerances[%d]", i)
@@ -232,6 +245,7 @@ type matcher struct {
 	ignore         sides
 	unordered      sides
 	numericStrings sides
+	enums          []enumSides
 	tolerances     []ruleSides
 }
 
@@ -266,6 +280,13 @@ func (c *compiled) match(e, a any) (*matcher, error) {
 	}
 	if m.numericStrings, err = evalSides(c.numericStrings, e, a); err != nil {
 		return nil, fmt.Errorf("numericStrings: %w", err)
+	}
+	for i, r := range c.enums {
+		s, err := evalSides([]*pathQuery{r.q}, e, a)
+		if err != nil {
+			return nil, fmt.Errorf("enums[%d]: %w", i, err)
+		}
+		m.enums = append(m.enums, enumSides{r, s})
 	}
 	for i, r := range c.tolerances {
 		s, err := evalSides([]*pathQuery{r.q}, e, a)
@@ -320,6 +341,9 @@ func (w *walker) walk(e, a any, pe, pa Path, tol AppliedTolerance) {
 		return
 	}
 	tol = w.m.at(pe, pa, tol)
+	if rule := w.m.enumAt(pe, pa); rule != nil && w.compareEnum(rule, e, a, pe) {
+		return
+	}
 	if w.m.numericStrings.has(pe, pa) {
 		_, okE := comparisonNumberLiteral(e, true)
 		_, okA := comparisonNumberLiteral(a, true)
