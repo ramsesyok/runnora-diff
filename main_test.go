@@ -147,3 +147,57 @@ func TestRunJSONOutputIsParseable(t *testing.T) {
 		t.Errorf("got %+v", res)
 	}
 }
+
+func TestRunEnums(t *testing.T) {
+	f := newFixture(t, map[string]string{
+		"e.json": `{"user":{"status":"STATUS_ACTIVE","ts":1},"members":[{"status":1},{"status":"STATUS_SUSPENDED"}]}`,
+		"rules.yaml": "enums:\n  - path: .user.status\n    values: &status {STATUS_UNSPECIFIED: 0, STATUS_ACTIVE: 1, STATUS_SUSPENDED: 2}\n" +
+			"  - path: .members[].status\n    values: *status\n",
+		"rules.json": `{"enums":[{"path":".user.status","values":{"STATUS_ACTIVE":1,"STATUS_SUSPENDED":2}},{"path":".members[].status","values":{"STATUS_ACTIVE":1,"STATUS_SUSPENDED":2}}]}`,
+		"bad.yaml":   "enums:\n  - path: .user.status\n    values: {STATUS_ACTIVE: 1.5}\n",
+	})
+	e := f.path("e.json")
+	same := `{"user":{"status":1,"ts":1},"members":[{"status":1},{"status":2}]}`
+	diff := `{"user":{"status":2,"ts":1},"members":[{"status":1},{"status":0}]}`
+
+	for _, cfg := range []string{"rules.yaml", "rules.json"} {
+		if got := runCLI(same, false, "-c", f.path(cfg), e, "-"); got.code != 0 || got.stdout != "" || got.stderr != "" {
+			t.Errorf("%s: equal: %+v", cfg, got)
+		}
+	}
+	if got := runCLI(same, false, e, "-"); got.code != 1 || !strings.Contains(got.stdout, `! .user.status: "STATUS_ACTIVE" (string) → 1 (number)`) {
+		t.Errorf("without enums: %+v", got)
+	}
+
+	got := runCLI(diff, false, "-c", f.path("rules.yaml"), e, "-")
+	for _, line := range []string{
+		`~ .members[1].status: "STATUS_SUSPENDED" → 0 (STATUS_UNSPECIFIED) (enum by ".members[].status")`,
+		`~ .user.status: "STATUS_ACTIVE" → 2 (STATUS_SUSPENDED) (enum by ".user.status")`,
+		"2 differences (compared 4 values, ignored 0)",
+	} {
+		if got.code != 1 || !strings.Contains(got.stdout, line) {
+			t.Errorf("text output lacks %q: %+v", line, got)
+		}
+	}
+
+	got = runCLI(diff, false, "--format", "json", "-c", f.path("rules.yaml"), "--ignore", ".members", e, "-")
+	var res struct {
+		Differences []struct {
+			Path string `json:"path"`
+			Enum struct {
+				Rule, Expected, Actual string
+			} `json:"enum"`
+		} `json:"differences"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &res); err != nil || got.code != 1 {
+		t.Fatalf("json output: %v, %+v", err, got)
+	}
+	if len(res.Differences) != 1 || res.Differences[0].Path != ".user.status" ||
+		res.Differences[0].Enum.Rule != ".user.status" || res.Differences[0].Enum.Expected != "STATUS_ACTIVE" || res.Differences[0].Enum.Actual != "STATUS_SUSPENDED" {
+		t.Errorf("json differences: %+v", res.Differences)
+	}
+
+	if got := runCLI(same, false, "-c", f.path("bad.yaml"), e, "-"); got.code != 2 || !strings.Contains(got.stderr, `value of "STATUS_ACTIVE" must be an integer`) {
+		t.Errorf("bad config: %+v", got)
+	}
+}

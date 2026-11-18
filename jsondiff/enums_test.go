@@ -195,3 +195,27 @@ func TestEnumJSONConfigErrors(t *testing.T) {
 		}
 	}
 }
+
+// An enum rule is tried before numericStrings at the same node; values the
+// enum rule cannot read (a number string) fall through to numericStrings.
+func TestEnumsWithNumericStrings(t *testing.T) {
+	opts := Options{Enums: []EnumRule{{Path: ".s", Values: statusEnum}}, NumericStrings: []string{".s"}, Default: Tolerance{Abs: 1}}
+	tests := []struct {
+		name, expected, actual string
+		want                   []string
+	}{
+		{"name and number", `{"s":"STATUS_ACTIVE"}`, `{"s":1}`, []string{}},
+		{"name and number string", `{"s":"STATUS_ACTIVE"}`, `{"s":"1"}`, []string{"changed .s"}},
+		{"number string and number", `{"s":"1"}`, `{"s":1}`, []string{}},
+		{"numbers keep tolerance", `{"s":"1"}`, `{"s":2}`, []string{}},
+		{"name ignores tolerance", `{"s":"STATUS_ACTIVE"}`, `{"s":2}`, []string{"changed .s"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := mustCompare(t, tt.expected, tt.actual, &opts)
+			if got := brief(r); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
