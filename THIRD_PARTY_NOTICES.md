@@ -8,8 +8,8 @@ For each module, the source archive below provides its exact, unmodified version
 
 | Module | Version | Source |
 |---|---|---|
-| github.com/itchyny/gojq | v0.12.19 | [source archive](https://proxy.golang.org/github.com/itchyny/gojq/@v/v0.12.19.zip) |
-| github.com/itchyny/timefmt-go | v0.1.8 | [source archive](https://proxy.golang.org/github.com/itchyny/timefmt-go/@v/v0.1.8.zip) |
+| github.com/itchyny/gojq | v0.12.20 | [source archive](https://proxy.golang.org/github.com/itchyny/gojq/@v/v0.12.20.zip) |
+| github.com/itchyny/timefmt-go | v0.1.9 | [source archive](https://proxy.golang.org/github.com/itchyny/timefmt-go/@v/v0.1.9.zip) |
 | gopkg.in/yaml.v3 | v3.0.1 | [source archive](https://proxy.golang.org/gopkg.in/yaml.v3/@v/v3.0.1.zip) |
 
 ## Go runtime and standard library
@@ -49,9 +49,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-## github.com/itchyny/gojq@v0.12.19
+## github.com/itchyny/gojq@v0.12.20
 
-Source: https://proxy.golang.org/github.com/itchyny/gojq/@v/v0.12.19.zip
+Source: https://proxy.golang.org/github.com/itchyny/gojq/@v/v0.12.20.zip
 
 ### LICENSE
 
@@ -80,16 +80,16 @@ SOFTWARE.
 ```
 
 
-## github.com/itchyny/timefmt-go@v0.1.8
+## github.com/itchyny/timefmt-go@v0.1.9
 
-Source: https://proxy.golang.org/github.com/itchyny/timefmt-go/@v/v0.1.8.zip
+Source: https://proxy.golang.org/github.com/itchyny/timefmt-go/@v/v0.1.9.zip
 
 ### LICENSE
 
 ```text
 The MIT License (MIT)
 
-Copyright (c) 2020-2025 itchyny
+Copyright (c) 2020-2026 itchyny
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
