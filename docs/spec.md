@@ -50,6 +50,7 @@ JSON の型（object / array / string / number / boolean / null）を区別す�
 |---|---|
 | `1` と `1.0`、`1e2` と `100` | 一致（数値として比較） |
 | `"1"` と `1` | 既定では不一致（型違い）。`numericStrings` の対象なら数値として比較 |
+| `"STATUS_ACTIVE"` と `1` | 既定では不一致（型違い）。`enums` の対象で対応表の名前なら番号として比較（3.6） |
 | `null` とキー不在 | 不一致（欠落 / 追加） |
 | `true` と `1` | 不一致（型違い） |
 
@@ -73,6 +74,24 @@ JSON の型（object / array / string / number / boolean / null）を区別す�
 - 表示用の `diff` は `float64` に変換した値。`float64` で表せない（無限大になる）場合は `diff` を省略する。
 - 指数が極端な数値（おおよそ `1e±1200` を超えるもの。例: `1e1000000`）は、厳密計算のコストが大きいため 512 bit 精度の浮動小数点で比較する。任意精度浮動小数点でも表せない範囲（例: `1e99999999999`）の数値は、リテラル文字列が同一の場合のみ一致とする。
 
+### 3.6 enum（名前と番号）
+
+`enums` が選択したノードでは、対応表（`values`）の名前と番号を同じ値として比較する。protobuf の enum を、片側は名前（`"STATUS_ACTIVE"`）、もう片側は番号（runn の gRPC レスポンスは `1`）で持つ場合などに使う。この機能は proto に依存しない。
+
+| expected | actual | 結果 |
+|---|---|---|
+| 名前（対応表にある） | 整数 | 名前の番号と整数が等しければ一致 |
+| 整数 | 名前（対応表にある） | 同上 |
+| 名前（対応表にある） | 名前（対応表にある） | 番号が等しければ一致（同じ番号の別名も一致） |
+| 整数 | 整数 | **対応表を使わず** 3.5 の数値比較（許容誤差も従来どおり） |
+| 対応表にない名前、整数でない数値（`1.5`）、null 等を含む | | 対応表を使わず通常の比較 |
+
+- 名前と番号、名前同士の比較は完全一致で、許容誤差は適用しない。整数は `1` / `1.0` / `1e0` のいずれの表記も同じ値とする。
+- 対応表にない番号（例: 名前 `"STATUS_ACTIVE"` と番号 `9`）は、値の相違（`changed`）として報告する。
+- 差分の `expected` / `actual` には変換前の値を出力し、`enum` に適用したルールと双方の名前を付ける（7 章）。
+- 複数のルールが同じノードに一致した場合は、リストの後方のルールを採用する。
+- 番号同士の比較を変えないため、`enums` を追加しても、それまで差分がなかったパスに差分が出ることはない。
+
 ## 4. パス指定
 
 runn の `compare` / `diff` 関数の `ignorePaths` と揃え、**jq のパス式**で指定する（評価は [gojq](https://github.com/itchyny/gojq) の `path()` を使用）。
@@ -91,11 +110,12 @@ runn の `compare` / `diff` 関数の `ignorePaths` と揃え、**jq のパス�
 - 構文エラー、およびパス式でない式（`1`、`.a | tostring` など）は設定エラー（終了コード 2）。
 - スライス（`.[1:3]`）で得られるパスは単一ノードに対応しないため無視する。
 - ignore / tolerances は、一致したノード **とその配下すべて** に適用される。
-- numericStrings は、一致したノード自身にのみ適用される。配列要素や子孫は `.ids[]` / `.stats | ..` 等で選択する。
+- numericStrings / enums は、一致したノード自身にのみ適用される。配列要素や子孫は `.ids[]` / `.stats | ..` 等で選択する。
 
 ## 5. ルールの優先順位
 
 1. `ignore` に該当するノードは比較しない（最優先）。
+1. `enums` に該当し、3.6 の条件（少なくとも片側が対応表の名前）を満たすノードは enum として比較する。満たさない場合は `numericStrings`、通常の比較の順に扱う。
 2. 数値ノードに対して複数の `tolerances` ルールが該当した場合、**一致したパスが最も深い（対象に最も近い）ルール** を採用する。深さが同じ場合は **リストの後方** のルールを採用する。
 3. どのルールにも該当しない場合は `default` を用いる。
 4. ルール内で `abs` / `rel` の片方のみ指定した場合、もう片方は `0` とみなす（`default` からは引き継がない）。
@@ -132,6 +152,8 @@ tolerances:
 | `ignore` | string[] | `[]` | 比較しないパス |
 | `unordered` | string[] | `[]` | 順序を問わない配列のパス |
 | `numericStrings` | string[] | `[]` | 数値文字列を数値比較するパス |
+| `enums[].path` | string | 必須 | enum として比較するパス |
+| `enums[].values` | map[string]integer | 必須（1 件以上） | 名前から番号への対応表。番号は整数のみ（`1.5`、`2.0`、`"1"` はエラー） |
 | `tolerances[].path` | string | 必須 | 適用パス |
 | `tolerances[].abs` | number | `0` | 絶対誤差 |
 | `tolerances[].rel` | number | `0` | 相対誤差 |
@@ -180,6 +202,7 @@ tolerances:
 | `!` | `type_mismatch` | 型の相違 |
 
 - 数値の相違には差（`diff`）と適用された許容誤差・由来ルール（`default` の場合は `by default`）を表示する。
+- enum として比較した相違は、番号の側に名前を添え、由来ルールを表示する。例: `~ .user.status: "STATUS_ACTIVE" → 2 (STATUS_SUSPENDED) (enum by ".user.status")`。同じ番号の別名は `STATUS_ACTIVE|STATUS_ENABLED` のように `|` で連結する。対応表にない番号には名前を付けない。
 - 差分は object のキー順（辞書順）・配列のインデックス順に並ぶ。
 - 一致時は何も出力しない（`-v` 指定時は要約行のみ）。
 
@@ -206,6 +229,7 @@ tolerances:
 - `removed` では `actual`、`added` では `expected` を省略する。`diff` / `tolerance` は数値の `changed` のみ。
 - `type_mismatch` では `expected_type` / `actual_type`（`object` / `array` / `string` / `number` / `boolean` / `null`）を追加する。
 - 由来ルールが既定値の場合、`tolerance.rule` は `"default"`。
+- enum として比較した `changed` では `enum`（`rule`、`expected`、`actual`）を追加する。`expected` / `actual` はその値の名前で、対応表にない番号では省略する。
 
 ## 8. 終了コード
 
@@ -268,8 +292,17 @@ type Options struct {
     Default    Tolerance       `json:"default"    yaml:"default"`
     Ignore     []string        `json:"ignore"     yaml:"ignore"`
     Unordered  []string        `json:"unordered"  yaml:"unordered"`
+    NumericStrings []string    `json:"numericStrings" yaml:"numericStrings"`
+    Enums      []EnumRule      `json:"enums"      yaml:"enums"`
     Tolerances []ToleranceRule `json:"tolerances" yaml:"tolerances"`
 }
+
+type EnumRule struct {
+    Path   string     `json:"path"   yaml:"path"`
+    Values EnumValues `json:"values" yaml:"values"`
+}
+
+type EnumValues map[string]int64
 
 func LoadConfig(path string) (*Options, error)
 

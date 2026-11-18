@@ -77,6 +77,10 @@ func (d Difference) text() string {
 		return fmt.Sprintf("%s %s: %s (%s) → %s (%s)", mark, d.Path,
 			formatValue(d.Expected), typeOf(d.Expected), formatValue(d.Actual), typeOf(d.Actual))
 	}
+	if d.Enum != nil {
+		return fmt.Sprintf("%s %s: %s → %s (enum by %s)", mark, d.Path,
+			enumValue(d.Expected, d.Enum.Expected), enumValue(d.Actual, d.Enum.Actual), strconv.Quote(d.Enum.Rule))
+	}
 	s := fmt.Sprintf("%s %s: %s → %s", mark, d.Path, formatValue(d.Expected), formatValue(d.Actual))
 	if d.Diff != nil && d.Tolerance != nil {
 		rule := strconv.Quote(d.Tolerance.Rule)
@@ -85,6 +89,15 @@ func (d Difference) text() string {
 		}
 		s += fmt.Sprintf(" (diff=%s, tolerance: abs=%s rel=%s by %s)",
 			formatFloat(*d.Diff), formatFloat(d.Tolerance.Abs), formatFloat(d.Tolerance.Rel), rule)
+	}
+	return s
+}
+
+// enumValue renders an enum side, adding the name to a number: 2 (STATUS_B).
+func enumValue(v any, name string) string {
+	s := formatValue(v)
+	if _, isString := v.(string); !isString && name != "" {
+		s += " (" + name + ")"
 	}
 	return s
 }

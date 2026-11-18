@@ -125,3 +125,56 @@ func FuzzParseConfig(f *testing.F) {
 		_, _ = ParseJSONConfig(data)
 	})
 }
+
+// FuzzCompareEnums checks that enum rules only relax a comparison: with a
+// rule applied to every node, a document still equals itself, both
+// directions report the same paths, and no path differs that did not differ
+// without the rule.
+func FuzzCompareEnums(f *testing.F) {
+	f.Add([]byte(`{"s":"A","t":["B",1,"C"]}`), []byte(`{"s":0,"t":[1,"C",2]}`))
+	f.Add([]byte(`["A","B",1.0,"D",null]`), []byte(`[0,"C","B",3,"A"]`))
+	for _, s := range fuzzSeeds {
+		f.Add([]byte(s[0]), []byte(s[1]))
+	}
+	opts := &Options{Enums: []EnumRule{{Path: "..", Values: EnumValues{"A": 0, "B": 1, "C": 1, "D": -1}}}}
+	paths := func(r *Result) map[string]bool {
+		m := map[string]bool{}
+		for _, d := range r.Differences {
+			m[d.Path] = true
+		}
+		return m
+	}
+	f.Fuzz(func(t *testing.T, eb, ab []byte) {
+		e := decodeOrSkip(t, eb)
+		a := decodeOrSkip(t, ab)
+
+		self, err := Compare(e, e, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !self.Equal {
+			t.Fatalf("document not equal to itself: %q", brief(self))
+		}
+		with, err := Compare(e, a, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rev, err := Compare(a, e, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		without, err := Compare(e, a, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(paths(with)) != len(paths(rev)) {
+			t.Fatalf("asymmetric: %q vs %q", brief(with), brief(rev))
+		}
+		base := paths(without)
+		for p := range paths(with) {
+			if !base[p] {
+				t.Fatalf("enum rule added a difference at %s: %q (without: %q)", p, brief(with), brief(without))
+			}
+		}
+	})
+}

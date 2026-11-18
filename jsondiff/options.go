@@ -36,6 +36,48 @@ type ToleranceRule struct {
 	Rel  float64 `json:"rel" yaml:"rel"`
 }
 
+// EnumRule maps enum value names to their numbers at the nodes matched by
+// Path, for example protobuf enums that one side holds as names and the other
+// as numbers. It is used only when at least one side is a name in Values: two
+// numbers are compared as numbers, and a name missing from Values as a string.
+// Names that share a number (aliases) compare equal.
+type EnumRule struct {
+	Path   string     `json:"path" yaml:"path"`
+	Values EnumValues `json:"values" yaml:"values"`
+}
+
+// EnumValues maps enum value names to their numbers.
+type EnumValues map[string]int64
+
+// UnmarshalYAML accepts integers only: decoding YAML into int64 would
+// otherwise truncate 1.5 to 1 and make different values compare equal.
+func (v *EnumValues) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: values must be a mapping of names to integers", n.Line)
+	}
+	m := EnumValues{}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		key, val := n.Content[i], n.Content[i+1]
+		var name string
+		if err := key.Decode(&name); err != nil {
+			return err
+		}
+		if _, dup := m[name]; dup {
+			return fmt.Errorf("line %d: duplicate value name %q", key.Line, name)
+		}
+		var num int64
+		if val.Kind != yaml.ScalarNode || val.ShortTag() != "!!int" {
+			return fmt.Errorf("line %d: value of %q must be an integer", val.Line, name)
+		}
+		if err := val.Decode(&num); err != nil {
+			return fmt.Errorf("line %d: value of %q: %w", val.Line, name, err)
+		}
+		m[name] = num
+	}
+	*v = m
+	return nil
+}
+
 // Options controls how two documents are compared.
 type Options struct {
 	// Default is the tolerance for numbers matched by no rule in Tolerances.
@@ -49,6 +91,10 @@ type Options struct {
 	// as numbers, on either side, including for tolerance comparisons. It
 	// does not apply to descendants unless the path expression selects them.
 	NumericStrings []string `json:"numericStrings" yaml:"numericStrings"`
+	// Enums lists enum value tables. At the nodes a rule matches, an enum name
+	// and its number compare equal in either direction. It does not apply to
+	// descendants unless the path expression selects them.
+	Enums []EnumRule `json:"enums" yaml:"enums"`
 	// Tolerances lists per-path tolerances. When several rules match a number,
 	// the rule matching the deepest path wins, and among rules matching at
 	// the same depth the last one wins.
